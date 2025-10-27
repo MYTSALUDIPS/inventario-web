@@ -24,15 +24,20 @@ app.use(express.static(path.join(__dirname)));
 const DB_PATH = path.join(__dirname, "inventario-web.db");
 const db = new sqlite3.Database(DB_PATH, (err) => {
   if (err) {
-    console.error("Error al conectar con la base de datos:", err.message);
+    console.error("❌ Error al conectar con la base de datos:", err.message);
   } else {
-    console.log("Conectado a la base de datos SQLite.");
+    console.log("✅ Conectado a la base de datos SQLite.");
   }
 });
 
 // ====== RUTA PRINCIPAL ======
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
+});
+
+// ====== RUTA DE ESTADO DEL SERVIDOR ======
+app.get("/estado", (req, res) => {
+  res.json({ status: "ok", message: "Servidor en línea y funcionando correctamente ✅" });
 });
 
 // ====== OBTENER TODOS LOS PEDIDOS ======
@@ -155,7 +160,7 @@ app.get("/api/facturas/:archivo", (req, res) => {
 });
 
 // ====== INICIAR SERVIDOR ======
-app.listen(PORT, () => {
-  console.log(`✅ Servidor corriendo en el puerto ${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
   console.log(`🌍 http://localhost:${PORT}`);
 });

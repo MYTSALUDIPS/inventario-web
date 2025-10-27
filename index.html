@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>KARDEX + PEDIDOS – MYT SALUD IPS</title>
+<!-- XLSX para Excel -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- jsPDF para PDFs -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<style>
+:root{--bg:#0b1220;--panel:rgba(10,15,30,.92);--ring:#334155;--ink:#fff;--muted:#a7b1c5;--accent:#06b6d4;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg) url("IMAGEN ACTUALIZA.png") no-repeat center center fixed;background-size:cover;color:var(--ink);font-family:system-ui,Segoe UI,Arial}
+h1,h2,h3,th,label,button,input,select,textarea{color:var(--ink);font-weight:700}
+.center{min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:var(--panel);border:1px solid var(--ring);border-radius:16px;padding:24px;width:96%;max-width:1900px;box-shadow:0 0 40px rgba(0,0,0,.6)}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #1e293b}
+.brand{display:flex;align-items:center;gap:12px}
+.brand img{width:120px;border-radius:12px;filter:drop-shadow(0 0 8px var(--accent))}
+.tabs{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.tab{padding:10px 14px;border:1px solid var(--ring);border-radius:999px;background:#0f1b2f;cursor:pointer;user-select:none}
+.tab.active{background:linear-gradient(180deg,#22d3ee,#06b6d4);color:#001016;border-color:#0891b2}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input,select,textarea,button{padding:10px;border-radius:10px;border:1px solid var(--ring);background:#0f1b2f}
+textarea{min-height:40px;resize:vertical}
+button{cursor:pointer;background:var(--accent);border-color:#0891b2;color:#001016}
+button.ghost{background:#1f2937;color:#e5e7eb;border-color:#334155}
+button.danger{background:#dc2626;color:#fff;border:none}
+button:hover{filter:brightness(1.08)}
+hr.sep{border:0;border-top:1px solid #223147;margin:12px 0}
+.tableWrap{overflow:auto;max-height:58vh;border:1px solid var(--ring);border-radius:12px}
+table{width:max(2000px,100%);border-collapse:collapse}
+th,td{padding:9px 11px;border-bottom:1px dashed #29405f;white-space:nowrap;vertical-align:middle}
+th{position:sticky;top:0;background:#102033;z-index:1}
+.badge{padding:4px 8px;border-radius:999px;border:1px solid #223147;font-weight:800;display:inline-block}
+.thumb{width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--ring);background:#0f1b2f}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#102033;border:1px solid #29405f;padding:10px 16px;border-radius:10px;opacity:0;transition:.25s;z-index:1000}
+.toast.show{opacity:1}
+.hidden{display:none}
+.footerSummary{margin-top:10px;display:flex;gap:12px;flex-wrap:wrap}
+.pill{background:#132035;border:1px solid #223147;padding:8px 12px;border-radius:999px}
+.right{text-align:right}
+.wide{min-width:260px}
+.nowrap{white-space:nowrap}
+kbd{padding:2px 6px;border:1px solid #334155;border-radius:6px;background:#0e1626}
+.small{font-size:12px;color:#a7b1c5}
+.tableWrap.small{max-height:45vh}
+.link{color:#22d3ee;cursor:pointer;text-decoration:underline}
+</style>
+</head>
+<body>
+
+<!-- ========== LOGIN ========== -->
+<div id="loginView" class="center">
+  <div class="card" style="max-width:520px;text-align:center">
+    <img src="IMAGEN ACTUALIZA.png" style="width:220px;filter:drop-shadow(0 0 12px #00c8ff);margin-bottom:8px" alt="MYT">
+    <h2>🔐 Iniciar sesión</h2>
+    <div class="row" style="justify-content:center">
+      <select id="selUsuario" style="min-width:220px"></select>
+      <input id="pin" type="password" placeholder="PIN" style="min-width:180px">
+      <button id="btnEntrar">Entrar</button>
+    </div>
+    <div class="small" style="margin-top:8px">Si olvidaste tu PIN, pídeselo a un Admin.</div>
+  </div>
+</div>
+
+<!-- ========== APP ========== -->
+<div id="appView" class="hidden">
+  <div class="card">
+    <div class="header">
+      <div class="brand">
+        <img src="IMAGEN ACTUALIZA.png" alt="logo">
+        <div>
+          <h1 style="margin:0">📦 MYT – <span id="lblUsuario"></span></h1>
+          <div class="tabs">
+            <div id="tabKardex" class="tab active">KARDEX</div>
+            <div id="tabMaestra" class="tab">MAESTRA</div>
+            <div id="tabPedidos" class="tab">PEDIDOS</div>
+            <div id="tabDespacho" class="tab">DESPACHO</div>
+            <div id="tabAuditoria" class="tab">AUDITORÍA</div>
+            <div id="tabUsuarios" class="tab">USUARIOS</div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <button id="btnSync" class="ghost">🔁 Sincronizar con Google Sheets</button>
+        <button id="btnSalir" class="danger">Cerrar sesión</button>
+      </div>
+    </div>
+
+    <!-- ================= KARDEX ================= -->
+    <section id="viewKardex">
+      <h3>➕ Registro de movimiento (Kardex)</h3>
+
+      <div class="row">
+        <select id="SelMaestra" class="wide"><option value="">🔎 Selecciona IdDescripcion (maestra)…</option></select>
+        <img id="k_thumb" class="thumb hidden" alt="">
+        <span style="flex:1"></span>
+        <input id="buscarK" placeholder="Buscar en Kardex…" class="wide">
+        <button id="btnExportKXLS">📤 Excel</button>
+        <button id="btnExportKJSON" class="ghost">⬇️ JSON</button>
+        <button id="btnImportK" class="ghost">⬆️ Importar</button>
+        <input id="inpK" type="file" accept=".xlsx,.csv,application/json" class="hidden">
+        <button id="btnPlantillaK" class="ghost">📄 Plantilla</button>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <input id="IdDescripcion" placeholder="IdDescripcion" style="min-width:200px">
+        <input id="NombreComercial" placeholder="Presentación Comercial" class="wide">
+        <input id="TipoProductos" placeholder="Tipo de Productos">
+        <input id="Concentracion" placeholder="Concentración">
+        <input id="UnidadMedida" placeholder="Unidad de Medida">
+        <input id="FormaFarmaceutica" placeholder="Forma Farmacéutica">
+        <input id="PrincipioActivo" placeholder="Principio Activo">
+        <input id="RefPlu" placeholder="Ref Plu">
+      </div>
+
+      <div class="row">
+        <input id="Cantidad" type="number" placeholder="Cantidad" style="width:120px">
+        <select id="Mov" style="width:120px"><option>Entrada</option><option>Salida</option></select>
+        <input id="CostoUnitario" type="number" placeholder="Costo Unitario" style="width:140px">
+        <select id="Iva" style="width:140px"><option value="">IVA</option><option>Exento</option><option>5%</option><option>19%</option></select>
+        <input id="RegistroInvima" placeholder="Registro Invima">
+        <input id="Lote" placeholder="Lote">
+        <input id="NoFactura" placeholder="No Factura">
+        <input id="Fecha" type="date" style="width:160px">
+        <input id="FechaVencimiento" type="date" style="width:180px">
+      </div>
+
+      <div class="row">
+        <input id="MarcaLab" placeholder="Marca / Laboratorio">
+        <input id="Proveedor" placeholder="Proveedor">
+        <input id="Nit" placeholder="NIT">
+        <select id="EstadoRS"><option value="">Estado Registro Sanitario</option><option>Vigente</option><option>No Vigente</option><option>No Aplica</option></select>
+        <select id="ClasifDisp"><option value="">Clasificación del Dispositivo</option><option>I</option><option>II</option><option>IIA</option><option>IIB</option><option>III</option><option>No Aplica</option></select>
+        <select id="TempAlmacen"><option value="">Temperatura de Almacén</option><option>0-2°C</option><option>2-7°C</option><option>9-14°C</option><option>15-25°C</option></select>
+        <select id="VidaUtil"><option value="">Vida Útil</option><option>Menor a 3 meses</option><option>3-6 meses</option><option>6-24 meses</option><option>2 años</option><option>5 años</option><option>No Aplica</option></select>
+      </div>
+
+      <div class="row">
+        <select id="Municipio">
+          <option value="">Municipio</option>
+          <option>Arauca</option><option>Tame</option><option>Puerto Rondón</option><option>Fortul</option>
+          <option>Saravena</option><option>Cubará</option><option>Arauquita</option><option>Puerto Jordán</option>
+          <option>Cravo Norte</option><option>Yopal</option>
+        </select>
+        <select id="Sede">
+          <option value="">Sede</option>
+          <option>Sede Principal</option><option>Sede B</option><option>Sede C</option><option>Sede D</option>
+          <option>Sede Especialidades Médicas</option><option>Sede Especialidades Médica Administrativa</option>
+          <option>Farmacia Punto 8</option><option>Farmacia Punto 16</option><option>Farmacia Sanitas Tame</option><option>Farmacia Subsidiado Tame</option>
+          <option>Dispensario Fortul</option><option>Dispensario Cravo Norte</option><option>Dispensario Cubará</option>
+        </select>
+        <select id="Ubicacion" class="wide">
+          <option value="">Ubicación</option>
+          <option>Odontología</option><option>Laboratorio</option><option>PYM</option><option>Procedimientos</option><option>Consultorios</option>
+          <option>SIAU</option><option>Atención Domiciliaria</option><option>Ambulancias</option><option>Alto Costo</option><option>Rayos X</option>
+          <option>Ecografías</option><option>Farmacia</option><option>Sistemas</option><option>Biomédica</option><option>Facturación</option>
+          <option>Contabilidad</option><option>Archivos</option><option>Talento Humano</option><option>SST</option><option>Vacunación</option>
+          <option>Servicios Generales</option><option>SIAU Línea de Frente</option><option>Consultorio PYM</option>
+        </select>
+        <textarea id="Observacion" placeholder="Observación (opcional)" style="flex:1"></textarea>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button id="btnGuardarK">💾 Guardar</button>
+        <button id="btnEntradaK">➕ Entrada</button>
+        <button id="btnSalidaK" class="danger">➖ Salida</button>
+        <button id="btnLimpiarK" class="ghost">🧹 Limpiar</button>
+      </div>
+
+      <hr class="sep">
+
+      <div class="tableWrap">
+        <table id="tablaK">
+          <thead>
+            <tr>
+              <th>IdDescripción</th><th>Presentación</th><th>Tipo</th><th>Concentración</th><th>U. Med.</th><th>Forma</th><th>Principio</th><th>Ref</th>
+              <th class="right">Cant</th><th>Mov</th><th>Lote</th><th>Factura</th><th>Fecha</th><th>Vencimiento</th><th>Semáforo</th>
+              <th>Marca</th><th>Proveedor</th><th>NIT</th><th>Estado RS</th><th>Clasif</th><th>Temp</th><th>Vida Útil</th>
+              <th>Municipio</th><th>Sede</th><th>Ubicación</th><th>Invima</th><th>Usuario</th><th>Observación</th>
+              <th class="right">Stock (Id+Lote)</th><th>Acción</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div id="resumenK" class="footerSummary"></div>
+    </section>
+
+    <!-- ================= MAESTRA ================= -->
+    <section id="viewMaestra" class="hidden">
+      <h3>🧾 Maestra de productos</h3>
+      <div class="row">
+        <button id="btnExportMaestra">⬇️ Exportar Plantilla</button>
+        <button id="btnImportMaestra">⬆️ Importar Maestra</button>
+        <input id="inpMaestra" type="file" accept=".xlsx,.csv,application/json" class="hidden">
+      </div>
+      <div class="tableWrap" style="margin-top:8px">
+        <table id="tblMaestra">
+          <thead>
+            <tr>
+              <th>IdDescripcion</th><th>Presentación Comercial</th><th>Tipo de Productos</th>
+              <th>Concentración</th><th>Unidad de Medida</th><th>Forma Farmacéutica</th>
+              <th>Principio Activo</th><th>Ref Plu</th><th>Imagen</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="small" style="margin-top:6px">Seleccionar en KARDEX autocompleta los campos.</div>
+    </section>
+
+    <!-- ================= PEDIDOS ================= -->
+    <section id="viewPedidos" class="hidden">
+      <h3>📝 Crear pedido</h3>
+      <div class="row">
+        <select id="pMunicipio">
+          <option value="">Municipio</option>
+          <option>Arauca</option><option>Tame</option><option>Puerto Rondón</option><option>Fortul</option>
+          <option>Saravena</option><option>Cubará</option><option>Arauquita</option><option>Puerto Jordán</option>
+          <option>Cravo Norte</option><option>Yopal</option>
+        </select>
+        <select id="pSede" class="wide">
+          <option value="">Sede</option>
+          <option>Sede Principal</option><option>Sede B</option><option>Sede C</option><option>Sede D</option>
+          <option>Sede Especialidades Médicas</option><option>Sede Especialidades Médica Administrativa</option>
+          <option>Farmacia Punto 8</option><option>Farmacia Punto 16</option><option>Farmacia Sanitas Tame</option><option>Farmacia Subsidiado Tame</option>
+          <option>Dispensario Fortul</option><option>Dispensario Cravo Norte</option><option>Dispensario Cubará</option>
+        </select>
+        <input id="pArea" placeholder="Área/Proceso">
+        <input id="pProceso" placeholder="Proceso">
+        <span class="small">Fecha pedido: <b id="pFechaText"></b></span>
+      </div>
+
+      <div class="row">
+        <select id="pProducto" class="wide">
+          <option value="">Producto (desde catálogo o escribe)</option>
+        </select>
+        <input id="pPresentacion" value="Unidad" placeholder="Presentación">
+        <input id="pCantidad" type="number" placeholder="Cantidad" style="width:140px">
+        <input id="pObs" placeholder="Observación" class="wide">
+        <button id="btnAddItem">➕ Agregar</button>
+        <button id="btnPlantillaPedido" class="ghost">📄 Plantilla Excel</button>
+        <button id="btnImportPedido" class="ghost">⬆️ Cargar Excel</button>
+        <input id="inpPedidoXLS" type="file" accept=".xlsx,.csv" class="hidden">
+      </div>
+
+      <div class="tableWrap small" style="margin-top:8px">
+        <table id="tblPedidoEdit">
+          <thead>
+            <tr>
+              <th>#</th><th>Producto</th><th>Presentación</th><th class="right">Cantidad</th><th>Observación</th><th>Acción</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button id="btnGuardarPedido">💾 Guardar pedido</button>
+        <button id="btnLimpiarPedido" class="ghost">🧹 Limpiar</button>
+      </div>
+
+      <hr class="sep">
+
+      <h3>📚 Mis pedidos</h3>
+      <div class="row">
+        <input id="buscarP" placeholder="Buscar en mis pedidos…" class="wide">
+        <button id="btnExportPedidos" class="ghost">📤 Excel</button>
+      </div>
+
+      <div class="tableWrap" style="margin-top:8px">
+        <table id="tblPedidos">
+          <thead>
+            <tr>
+              <th>Fecha pedido</th><th>Producto</th><th>Presentación</th><th class="right">Cant. solicitada</th><th>Observación</th>
+              <th>Municipio</th><th>Sede</th><th>Área</th><th>Proceso</th>
+              <th class="right">Entregada</th><th class="right">Pendiente</th><th>Entrega #1</th><th>Entrega #2</th><th>Obs despacho</th><th>Factura</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= DESPACHO (solo admin / despacho) ================= -->
+    <section id="viewDespacho" class="hidden">
+      <h3>🚚 Despacho / Entregas</h3>
+      <div class="row">
+        <input id="buscarD" placeholder="Buscar pedidos…" class="wide">
+        <button id="btnExportDespacho" class="ghost">📤 Excel</button>
+      </div>
+      <div class="tableWrap" style="margin-top:8px">
+        <table id="tblDespacho">
+          <thead>
+            <tr>
+              <th>Fecha pedido</th><th>Usuario</th><th>Producto</th><th>Presentación</th><th class="right">Solicitada</th>
+              <th>Municipio</th><th>Sede</th><th>Área</th><th>Proceso</th>
+              <th class="right">Entregada</th><th class="right">Pendiente</th>
+              <th>Entrega #1</th><th>Entrega #2</th><th>Obs despacho</th><th>Factura</th><th>Acción</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= AUDITORÍA ================= -->
+    <section id="viewAuditoria" class="hidden">
+      <h3>🧾 Auditoría de movimientos</h3>
+      <div class="row">
+        <input id="audBuscar" placeholder="Buscar en auditoría…" class="wide">
+        <label>Desde <input id="audDesde" type="date"></label>
+        <label>Hasta <input id="audHasta" type="date"></label>
+        <button id="btnAudFiltrar" class="ghost">Filtrar</button>
+        <button id="btnAudExport" class="ghost">Exportar Excel</button>
+      </div>
+      <div class="footerSummary" id="audResumen"></div>
+      <div class="tableWrap" style="margin-top:8px">
+        <table id="tblAud">
+          <thead>
+            <tr>
+              <th>Fecha</th><th>Usuario</th><th>IdDescripción</th><th>Presentación</th><th>Mov</th><th class="right">Cantidad</th>
+              <th>Lote</th><th>Factura</th><th>Invima</th><th>Vence</th><th>Semáforo</th><th>Proveedor</th><th>Municipio</th><th>Sede</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= USUARIOS (ADMIN) ================= -->
+    <section id="viewUsuarios" class="hidden">
+      <h3>👥 Gestión de usuarios</h3>
+      <div class="row">
+        <input id="newUser" placeholder="Usuario (id)">
+        <input id="newName" placeholder="Nombre visible">
+        <input id="newPin" type="password" placeholder="PIN">
+        <select id="newRole">
+          <option value="user">User</option>
+          <option value="despacho">Despacho</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button id="btnAddUser">➕ Agregar</button>
+      </div>
+      <div class="tableWrap" style="margin-top:8px">
+        <table id="tblUsers">
+          <thead><tr><th>ID</th><th>Nombre</th><th>Rol</th><th>PIN</th><th>Acción</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* ===================== CONFIG ===================== */
+const CONFIG = {
+  SHEETS_URL: "https://script.google.com/macros/s/AKfycbymraLao4lotnSZk9cYMZDpQyKcr6QQRC_aajsuMJsPRZu0A2NMMozDNRCT82VNZ82TdA/exec"
+};
+
+/* ===================== UTIL ===================== */
+const $ = s => document.querySelector(s);
+const nn = v => isNaN(+v)?0:+v;
+const show = sel => $(sel).classList.remove("hidden");
+const hide = sel => $(sel).classList.add("hidden");
+const toast = m => {const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2000);}
+const today = () => new Date().toISOString().slice(0,10);
+const uid = () => Math.random().toString(36).slice(2)+Date.now().toString(36);
+
+/* ===================== STORAGE KEYS ===================== */
+const LS_USERS="kardex_users_v5";
+const LS_ITEMS="kardex_items_v5";      // Kardex
+const LS_MASTER="kardex_master_v5";    // Maestra
+const LS_PEDIDOS="kardex_pedidos_v2";  // Pedidos
+const LS_CAT="kardex_catalogo_v1";     // Catálogo de productos (para pedidos)
+
+/* ===================== ESTADO ===================== */
+let USERS=[], currentUser=null;
+let ITEMS=[], MASTER=[], PEDIDOS=[], CATALOGO=[]; // objetos
+let STOCK = {};
+
+/* ===================== LOGIN ===================== */
+function loadUsers(){
+  try{USERS=JSON.parse(localStorage.getItem(LS_USERS)||"[]");}catch{USERS=[];}
+  if(USERS.length===0){
+    USERS=[
+      {id:"admin",name:"Administrador",pin:"1234",role:"admin"},
+      {id:"despacho",name:"Despacho",pin:"5555",role:"despacho"},
+      {id:"odontologia",name:"Odontología",pin:"1111",role:"user"}
+    ];
+    localStorage.setItem(LS_USERS,JSON.stringify(USERS));
+  }
+}
+function renderUserSelect(){
+  $("#selUsuario").innerHTML=USERS.map(u=>`<option value="${u.id}">${u.name}</option>`).join('');
+}
+window.addEventListener("DOMContentLoaded",()=>{loadUsers();renderUserSelect();$("#pFechaText").textContent=today();});
+
+$("#btnEntrar").onclick=async ()=>{
+  const u=USERS.find(x=>x.id===$("#selUsuario").value && x.pin===$("#pin").value);
+  if(!u){ toast("❌ PIN incorrecto"); return; }
+  currentUser=u;
+  $("#lblUsuario").textContent=`${u.name} (${u.role})`;
+  hide("#loginView"); show("#appView");
+  await initApp();
+};
+$("#btnSalir").onclick=()=>{ hide("#appView"); show("#loginView"); $("#pin").value=''; currentUser=null; };
+
+/* ===================== TABS + ROLES ===================== */
+function selTab(tabSel,viewSel){
+  document.querySelectorAll(".tab").forEach(e=>e.classList.remove("active"));
+  document.querySelectorAll("section").forEach(e=>hide("#"+e.id));
+  $(tabSel).classList.add("active"); show(viewSel);
+}
+$("#tabKardex").onclick=()=> selTab("#tabKardex","#viewKardex");
+$("#tabMaestra").onclick=()=>{ if(!isAdmin()) return toast("🚫 Solo Admin");
+  selTab("#tabMaestra","#viewMaestra"); };
+$("#tabUsuarios").onclick=()=>{ if(!isAdmin()) return toast("🚫 Solo Admin");
+  selTab("#tabUsuarios","#viewUsuarios"); renderUsersTable(); };
+$("#tabPedidos").onclick=()=>{ selTab("#tabPedidos","#viewPedidos"); renderMisPedidos(); };
+$("#tabDespacho").onclick=()=>{ if(!(isAdmin()||isDespacho())) return toast("🚫 Solo Despacho/Admin");
+  selTab("#tabDespacho","#viewDespacho"); renderDespacho(); };
+$("#tabAuditoria").onclick=()=>{ selTab("#tabAuditoria","#viewAuditoria"); renderAuditoria(); };
+
+function isAdmin(){ return currentUser && currentUser.role==="admin"; }
+function isDespacho(){ return currentUser && currentUser.role==="despacho"; }
+
+/* ===================== INIT APP ===================== */
+async function initApp(){
+  try{ITEMS=JSON.parse(localStorage.getItem(LS_ITEMS)||"[]");}catch{ITEMS=[];}
+  try{MASTER=JSON.parse(localStorage.getItem(LS_MASTER)||"[]");}catch{MASTER=[];}
+  try{PEDIDOS=JSON.parse(localStorage.getItem(LS_PEDIDOS)||"[]");}catch{PEDIDOS=[];}
+  try{CATALOGO=JSON.parse(localStorage.getItem(LS_CAT)||"[]");}catch{CATALOGO=[];}
+
+  // Cargar catálogo al selector de pedidos
+  renderCatalogoSelect();
+
+  renderMasterSelect(); renderMasterTable();
+  renderKardexTabla();
+  if(isAdmin()) renderUsersTable();
+
+  // Sincroniza desde Sheets (pedidos y kardex) para ver en otros equipos
+  await syncFromSheets();
+}
+
+/* ===================== GOOGLE SHEETS SYNC ===================== */
+// Helper fetch
+async function gsPost(payload){
+  const res = await fetch(CONFIG.SHEETS_URL, {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+async function gsGet(params){
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(CONFIG.SHEETS_URL + "?" + qs);
+  return res.json();
+}
+
+async function syncFromSheets(){
+  try{
+    // Traer pedidos
+    const p = await gsGet({action:"list_pedidos"});
+    if(Array.isArray(p)){
+      // Reemplaza por servidor (opción simple)
+      PEDIDOS = p;
+      localStorage.setItem(LS_PEDIDOS,JSON.stringify(PEDIDOS));
+    }
+  }catch(e){}
+  try{
+    const k = await gsGet({action:"list_kardex"});
+    if(Array.isArray(k)){
+      ITEMS = k;
+      localStorage.setItem(LS_ITEMS,JSON.stringify(ITEMS));
+    }
+  }catch(e){}
+  // Render
+  renderKardexTabla();
+  renderMisPedidos();
+  if(isAdmin()||isDespacho()) renderDespacho();
+  toast("🔁 Sincronizado desde Google Sheets");
+}
+
+$("#btnSync").onclick=async ()=>{
+  try{
+    await gsPost({action:"bulk_upsert", pedidos:PEDIDOS, kardex:ITEMS});
+    toast("✅ Enviado a Google Sheets");
+  }catch(e){
+    toast("⚠️ No se pudo enviar a Sheets");
+  }
+  await syncFromSheets();
+};
+
+/* ===================== MAESTRA ===================== */
+$("#btnExportMaestra").onclick=()=>{
+  if(!isAdmin()) return toast("🚫 Solo admin");
+  const headers=[{
+    "IdDescripcion":"","Presentacion Comercial":"","Tipo de Productos":"",
+    "Concentracion":"","Unidad de Medida":"","Forma Farmaceutica":"",
+    "Principio Activo":"","Ref Plu":"","Imagen":"(URL/Base64)"
+  }];
+  const ws=XLSX.utils.json_to_sheet(headers);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Maestra");
+  XLSX.writeFile(wb,"Plantilla_Maestra.xlsx");
+  toast("📄 Plantilla exportada");
+};
+$("#btnImportMaestra").onclick=()=>{ if(!isAdmin()) return toast("🚫 Solo admin"); $("#inpMaestra").click(); };
+$("#inpMaestra").onchange=async ev=>{
+  const f=ev.target.files[0]; if(!f) return;
+  const ab=await f.arrayBuffer();
+  const wb=XLSX.read(new Uint8Array(ab),{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+  MASTER = rows.map(r=>({
+    IdDescripcion:r.IdDescripcion||'',
+    Presentacion:r["Presentacion Comercial"]||'',
+    TipoProductos:r["Tipo de Productos"]||'',
+    Concentracion:r.Concentracion||'',
+    UnidadMedida:r["Unidad de Medida"]||'',
+    FormaFarmaceutica:r["Forma Farmaceutica"]||'',
+    PrincipioActivo:r["Principio Activo"]||'',
+    RefPlu:r["Ref Plu"]||'',
+    Imagen:r.Imagen||''
+  })).filter(x=>x.IdDescripcion);
+  localStorage.setItem(LS_MASTER,JSON.stringify(MASTER));
+  renderMasterSelect(); renderMasterTable();
+  toast(`✅ ${MASTER.length} productos importados`);
+};
+
+function renderMasterSelect(){
+  $("#SelMaestra").innerHTML='<option value="">🔎 Selecciona IdDescripcion…</option>'+
+    MASTER.map(p=>`<option value="${p.IdDescripcion}">${p.IdDescripcion} — ${p.Presentacion}</option>`).join('');
+}
+function renderMasterTable(){
+  const tb=$("#tblMaestra tbody"); tb.innerHTML='';
+  MASTER.forEach(p=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${p.IdDescripcion}</td><td>${p.Presentacion}</td><td>${p.TipoProductos}</td>
+      <td>${p.Concentracion}</td><td>${p.UnidadMedida}</td><td>${p.FormaFarmaceutica}</td>
+      <td>${p.PrincipioActivo}</td><td>${p.RefPlu}</td><td>${p.Imagen?'<img class="thumb" src="'+p.Imagen+'">':'—'}</td>`;
+    tb.appendChild(tr);
+  });
+}
+$("#SelMaestra").onchange=()=>{
+  const id=$("#SelMaestra").value;
+  const p=MASTER.find(x=>x.IdDescripcion===id);
+  if(!p){ $("#k_thumb").classList.add('hidden'); return; }
+  $("#IdDescripcion").value=p.IdDescripcion;
+  $("#NombreComercial").value=p.Presentacion;
+  $("#TipoProductos").value=p.TipoProductos;
+  $("#Concentracion").value=p.Concentracion;
+  $("#UnidadMedida").value=p.UnidadMedida;
+  $("#FormaFarmaceutica").value=p.FormaFarmaceutica;
+  $("#PrincipioActivo").value=p.PrincipioActivo;
+  $("#RefPlu").value=p.RefPlu;
+  if(p.Imagen){ const th=$("#k_thumb"); th.src=p.Imagen; th.classList.remove('hidden'); } else { $("#k_thumb").classList.add('hidden'); }
+};
+
+/* ===================== KARDEX ===================== */
+function diasA(iso){if(!iso)return null;const hoy=new Date();hoy.setHours(0,0,0,0);const v=new Date(iso+'T00:00:00');return Math.ceil((v-hoy)/86400000);}
+function badgeClass(d){if(d===null)return{bg:'#64748b',fg:'#fff',tx:'—'};if(d<0)return{bg:'#ef4444',fg:'#fff',tx:'Vencido'};if(d<=30)return{bg:'#f59e0b',fg:'#000',tx:d+' días'};if(d<=90)return{bg:'#fde047',fg:'#000',tx:d+' días'};return{bg:'#16a34a',fg:'#001016',tx:d+' días'};}
+function keyLot(m){return (m.IdDescripcion||'')+'|'+(m.Lote||'');}
+
+function calcStockK(rows){
+  const S={};
+  rows.forEach(m=>{
+    const k=keyLot(m);
+    if(!S[k]) S[k]=0;
+    if(m.Mov==='Entrada') S[k]+=nn(m.Cantidad);
+    else S[k]=Math.max(0, S[k]-nn(m.Cantidad));
+  });
+  return S;
+}
+function visibleK(){
+  let rows = ITEMS.slice();
+  if(currentUser && currentUser.role!=="admin"){
+    // Usuarios no admin ven solo lo suyo
+    rows = rows.filter(m=>m.Usuario===currentUser.name);
+  }
+  const q = ($("#buscarK").value||"").toLowerCase();
+  if(q){
+    rows = rows.filter(m=>{
+      const s = [
+        m.IdDescripcion,m.NombreComercial,m.RefPlu,m.Proveedor,m.MarcaLab,m.NoFactura,m.Lote,
+        m.Municipio,m.Sede,m.Ubicacion,m.RegistroInvima,m.Usuario
+      ].join(' ').toLowerCase();
+      return s.includes(q);
+    });
+  }
+  return rows;
+}
+function renderKardexTabla(){
+  const rows = visibleK();
+  const S = calcStockK(rows);
+  const tb=$("#tablaK tbody"); tb.innerHTML='';
+  let productos = new Set(), stockTotal=0, valorTotal=0;
+
+  rows.forEach(m=>{
+    const d=diasA(m.FechaVencimiento), bc=badgeClass(d);
+    const k = keyLot(m), st=S[k]||0;
+    productos.add(m.IdDescripcion); stockTotal += st;
+    const ivaNum = (m.Iva==="19%"?0.19 : m.Iva==="5%"?0.05 : 0);
+    valorTotal += st*nn(m.CostoUnitario)*(1+ivaNum);
+
+    const realIndex = ITEMS.findIndex(x => x.t===m.t);
+
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${m.IdDescripcion||''}</td><td>${m.NombreComercial||''}</td><td>${m.TipoProductos||''}</td>
+      <td>${m.Concentracion||''}</td><td>${m.UnidadMedida||''}</td><td>${m.FormaFarmaceutica||''}</td><td>${m.PrincipioActivo||''}</td><td>${m.RefPlu||''}</td>
+      <td class="right">${nn(m.Cantidad)}</td><td>${m.Mov}</td><td>${m.Lote||''}</td><td>${m.NoFactura||''}</td>
+      <td>${m.Fecha||''}</td><td>${m.FechaVencimiento||''}</td>
+      <td><span class="badge" style="background:${bc.bg};color:${bc.fg}">${bc.tx}</span></td>
+      <td>${m.MarcaLab||''}</td><td>${m.Proveedor||''}</td><td>${m.Nit||''}</td><td>${m.EstadoRS||''}</td><td>${m.ClasifDisp||''}</td>
+      <td>${m.TempAlmacen||''}</td><td>${m.VidaUtil||''}</td><td>${m.Municipio||''}</td><td>${m.Sede||''}</td><td>${m.Ubicacion||''}</td>
+      <td>${m.RegistroInvima||''}</td><td>${m.Usuario||''}</td><td>${m.Observacion||''}</td>
+      <td class="right"><b>${st}</b></td>
+      <td>${isAdmin()?`<button class='danger' onclick='delK(${realIndex})'>🗑️</button>`:''}</td>`;
+    tb.appendChild(tr);
+  });
+
+  $("#resumenK").innerHTML = `
+    <div class="pill">🧩 Productos distintos: <b>${productos.size}</b></div>
+    <div class="pill">📦 Stock total: <b>${stockTotal}</b></div>
+    <div class="pill">💰 Valor estimado: <b>$${Math.round(valorTotal).toLocaleString()}</b></div>
+    <div class="pill">🧮 Registros: <b>${rows.length}</b></div>`;
+}
+function persistK(){ localStorage.setItem(LS_ITEMS,JSON.stringify(ITEMS)); }
+
+function getBaseK(forzado=null){
+  const m={
+    IdDescripcion:$("#IdDescripcion").value.trim(),
+    NombreComercial:$("#NombreComercial").value.trim(),
+    TipoProductos:$("#TipoProductos").value.trim(),
+    Concentracion:$("#Concentracion").value.trim(),
+    UnidadMedida:$("#UnidadMedida").value.trim(),
+    FormaFarmaceutica:$("#FormaFarmaceutica").value.trim(),
+    PrincipioActivo:$("#PrincipioActivo").value.trim(),
+    RefPlu:$("#RefPlu").value.trim(),
+    Cantidad:nn($("#Cantidad").value),
+    Mov:forzado||$("#Mov").value,
+    CostoUnitario:nn($("#CostoUnitario").value),
+    Iva:$("#Iva").value,
+    Fecha:$("#Fecha").value||today(),
+    FechaVencimiento:$("#FechaVencimiento").value,
+    Lote:$("#Lote").value.trim(),
+    NoFactura:$("#NoFactura").value.trim(),
+    RegistroInvima:$("#RegistroInvima").value.trim(),
+    MarcaLab:$("#MarcaLab").value.trim(),
+    Proveedor:$("#Proveedor").value.trim(),
+    Nit:$("#Nit").value.trim(),
+    EstadoRS:$("#EstadoRS").value,
+    ClasifDisp:$("#ClasifDisp").value,
+    TempAlmacen:$("#TempAlmacen").value,
+    VidaUtil:$("#VidaUtil").value,
+    Municipio:$("#Municipio").value,
+    Sede:$("#Sede").value,
+    Ubicacion:$("#Ubicacion").value,
+    Observacion:$("#Observacion").value.trim(),
+    Usuario: currentUser ? currentUser.name : '',
+    t: new Date().toISOString()
+  };
+  if(!(m.IdDescripcion && m.Cantidad>0 && m.FechaVencimiento && m.Lote)){
+    toast("⚠️ Requiere: Id, Cantidad>0, Lote y Vencimiento"); return null;
+  }
+  return m;
+}
+async function saveKToSheets(mov){
+  try{ await gsPost({action:"save_kardex", data:mov}); }catch(e){}
+}
+async function guardarK(forzado=null){
+  const m = getBaseK(forzado); if(!m) return;
+  ITEMS.push(m); persistK(); renderKardexTabla(); toast("✅ Movimiento guardado");
+  // enviar a Sheets
+  saveKToSheets(m);
+  limpiarK();
+}
+function limpiarK(){
+  document.querySelectorAll("#viewKardex input,#viewKardex textarea,#viewKardex select")
+    .forEach(e=>{ if(e.id!=="buscarK") e.value=''; });
+}
+function delK(i){
+  if(i<0) return;
+  if(!confirm("¿Eliminar registro?")) return;
+  ITEMS.splice(i,1); persistK(); renderKardexTabla(); toast("🗑️ Eliminado");
+}
+$("#btnGuardarK").onclick=()=>guardarK();
+$("#btnEntradaK").onclick=()=>guardarK('Entrada');
+$("#btnSalidaK").onclick=()=>guardarK('Salida');
+$("#btnLimpiarK").onclick=limpiarK;
+$("#buscarK").oninput=renderKardexTabla;
+
+/* Export / Import Kardex */
+const K_HEADERS=[
+ "IdDescripcion","NombreComercial","TipoProductos","Concentracion","UnidadMedida","FormaFarmaceutica","PrincipioActivo",
+ "RefPlu","Cantidad","Mov","CostoUnitario","Iva","Fecha","RegistroInvima","Lote","FechaVencimiento",
+ "MarcaLab","Proveedor","Nit","NoFactura","EstadoRS","ClasifDisp","TempAlmacen","VidaUtil","Municipio","Sede","Ubicacion","Observacion","Usuario","t"
+];
+$("#btnPlantillaK").onclick=()=>{
+  const ws=XLSX.utils.json_to_sheet([Object.fromEntries(K_HEADERS.map(h=>[h,""]))]);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Kardex");
+  XLSX.writeFile(wb,"Plantilla_Kardex.xlsx"); toast("📄 Plantilla exportada");
+};
+$("#btnExportKXLS").onclick=()=>{
+  const rows = visibleK();
+  const data = rows.map(m=>{const o={};K_HEADERS.forEach(h=>o[h]=m[h]??"");return o;});
+  const ws=XLSX.utils.json_to_sheet(data,{header:K_HEADERS});
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Kardex");
+  XLSX.writeFile(wb,"Kardex.xlsx"); toast("📤 Exportado Excel");
+};
+$("#btnExportKJSON").onclick=()=>{
+  const rows = visibleK();
+  const blob = new Blob([JSON.stringify({items:rows},null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="kardex.json"; a.click(); URL.revokeObjectURL(a.href);
+  toast("📤 JSON exportado");
+};
+$("#btnImportK").onclick=()=>{ if(!isAdmin()) return toast("🚫 Solo admin"); $("#inpK").click(); };
+$("#inpK").onchange=async ev=>{
+  const f=ev.target.files[0]; if(!f) return;
+  const name=f.name.toLowerCase();
+  try{
+    let rows=[];
+    if(name.endsWith(".json")){
+      const txt=await f.text(); const obj=JSON.parse(txt);
+      rows = Array.isArray(obj)?obj : (Array.isArray(obj.items)?obj.items:[]);
+    }else{
+      const ab=await f.arrayBuffer();
+      const wb=XLSX.read(new Uint8Array(ab),{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+    }
+    let add=0;
+    rows.forEach(r=>{
+      const o={}; K_HEADERS.forEach(h=> o[h] = r[h] ?? r[h?.toLowerCase?.()] ?? r[h?.toUpperCase?.()] ?? "" );
+      o.Cantidad = nn(o.Cantidad);
+      if(!o.Mov) o.Mov="Entrada";
+      if(!o.t) o.t=new Date().toISOString();
+      if(o.IdDescripcion && o.Cantidad>0 && o.FechaVencimiento && o.Lote){ ITEMS.push(o); add++; }
+    });
+    persistK(); renderKardexTabla();
+    toast(`✅ Importado ${add} filas`);
+  }catch(err){ alert("Error importando: "+err.message); }
+  ev.target.value='';
+};
+
+/* ===================== AUDITORÍA ===================== */
+function audFiltradas(){
+  const q=$("#audBuscar").value.trim().toLowerCase();
+  const d=$("#audDesde").value, h=$("#audHasta").value;
+  return ITEMS.filter(m=>{
+    let ok=true;
+    if(d && (m.Fecha||'')<d) ok=false;
+    if(h && (m.Fecha||'')>h) ok=false;
+    if(q){
+      const s=[m.Usuario,m.IdDescripcion,m.NombreComercial,m.Mov,m.Lote,m.NoFactura,m.RegistroInvima,m.Proveedor,m.Municipio,m.Sede].join(' ').toLowerCase();
+      if(!s.includes(q)) ok=false;
+    }
+    return ok;
+  });
+}
+function renderAuditoria(){
+  const rows = audFiltradas();
+  const tb=$("#tblAud tbody"); tb.innerHTML='';
+  let nMov=rows.length, nEnt=0, nSal=0, uEnt=0, uSal=0;
+  rows.forEach(m=>{
+    if(m.Mov==='Entrada'){ nEnt++; uEnt+=nn(m.Cantidad); } else { nSal++; uSal+=nn(m.Cantidad); }
+    const d=diasA(m.FechaVencimiento), bc=badgeClass(d);
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${m.Fecha||''}</td><td>${m.Usuario||''}</td><td>${m.IdDescripcion||''}</td><td>${m.NombreComercial||''}</td>
+      <td>${m.Mov}</td><td class="right">${nn(m.Cantidad)}</td><td>${m.Lote||''}</td><td>${m.NoFactura||''}</td>
+      <td>${m.RegistroInvima||''}</td><td>${m.FechaVencimiento||''}</td>
+      <td><span class="badge" style="background:${bc.bg};color:${bc.fg}">${bc.tx}</span></td>
+      <td>${m.Proveedor||''}</td><td>${m.Municipio||''}</td><td>${m.Sede||''}</td>`;
+    tb.appendChild(tr);
+  });
+  $("#audResumen").innerHTML=`
+    <div class="pill">🧾 Movimientos: <b>${nMov}</b></div>
+    <div class="pill">➕ Entradas (reg): <b>${nEnt}</b></div>
+    <div class="pill">➖ Salidas (reg): <b>${nSal}</b></div>
+    <div class="pill">📦 Unid. Entradas: <b>${uEnt}</b></div>
+    <div class="pill">📦 Unid. Salidas: <b>${uSal}</b></div>
+  `;
+}
+$("#audBuscar").oninput=renderAuditoria;
+$("#btnAudFiltrar").onclick=renderAuditoria;
+$("#btnAudExport").onclick=()=>{
+  const rows = audFiltradas();
+  const data = rows.map(m=>({
+    Fecha:m.Fecha||'', Usuario:m.Usuario||'', IdDescripcion:m.IdDescripcion||'',
+    Presentacion:m.NombreComercial||'', Mov:m.Mov, Cantidad:nn(m.Cantidad),
+    Lote:m.Lote||'', Factura:m.NoFactura||'', Invima:m.RegistroInvima||'',
+    Vence:m.FechaVencimiento||'', Proveedor:m.Proveedor||'', Municipio:m.Municipio||'', Sede:m.Sede||''
+  }));
+  const ws=XLSX.utils.json_to_sheet(data);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Auditoria");
+  XLSX.writeFile(wb,"Auditoria_Kardex.xlsx"); toast("📤 Auditoría exportada");
+};
+
+/* ===================== USUARIOS (ADMIN) ===================== */
+function renderUsersTable(){
+  const tb=$("#tblUsers tbody"); tb.innerHTML='';
+  USERS.forEach((u,i)=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${u.id}</td>
+      <td contenteditable onblur="editUser(${i},'name',this.textContent)">${u.name}</td>
+      <td>
+        <select onchange="editUser(${i},'role',this.value)">
+          <option ${u.role==='user'?'selected':''} value="user">user</option>
+          <option ${u.role==='despacho'?'selected':''} value="despacho">despacho</option>
+          <option ${u.role==='admin'?'selected':''} value="admin">admin</option>
+        </select>
+      </td>
+      <td contenteditable onblur="editUser(${i},'pin',this.textContent)">${u.pin}</td>
+      <td>${u.role!=="admin"?`<button class='danger' onclick='delUser(${i})'>🗑️</button>`:""}</td>`;
+    tb.appendChild(tr);
+  });
+}
+function editUser(i,field,val){
+  USERS[i][field]=val.trim();
+  localStorage.setItem(LS_USERS,JSON.stringify(USERS));
+  toast("💾 Usuario actualizado");
+}
+function delUser(i){
+  if(!confirm("¿Eliminar usuario?"))return;
+  USERS.splice(i,1); localStorage.setItem(LS_USERS,JSON.stringify(USERS));
+  renderUsersTable(); renderUserSelect();
+}
+$("#btnAddUser").onclick=()=>{
+  const id=$("#newUser").value.trim(), name=$("#newName").value.trim(), pin=$("#newPin").value.trim(), role=$("#newRole").value;
+  if(!(id&&name&&pin)) return toast("⚠️ Datos incompletos");
+  if(USERS.some(u=>u.id===id)) return toast("⚠️ ID ya existe");
+  USERS.push({id,name,pin,role}); localStorage.setItem(LS_USERS,JSON.stringify(USERS));
+  renderUsersTable(); renderUserSelect(); toast("✅ Usuario agregado");
+  $("#newUser").value=$("#newName").value=$("#newPin").value='';
+};
+
+/* ===================== CATALOGO (para pedidos) ===================== */
+function renderCatalogoSelect(){
+  const sel=$("#pProducto");
+  const base = '<option value="">Producto (desde catálogo o escribe)</option>';
+  sel.innerHTML = base + CATALOGO.map(c=>`<option value="${c.Producto}">${c.Producto}</option>`).join('');
+}
+function upsertCatalogo(prod){
+  if(!prod) return;
+  if(!CATALOGO.some(c=>c.Producto.toLowerCase()===prod.toLowerCase())){
+    CATALOGO.push({Producto:prod});
+    localStorage.setItem(LS_CAT,JSON.stringify(CATALOGO));
+    renderCatalogoSelect();
+  }
+}
+
+/* ===================== PEDIDOS ===================== */
+let PED_EDICION = []; // items del pedido en edición
+
+$("#btnAddItem").onclick=()=>{
+  const prod = ($("#pProducto").value || "").trim() || ($("#pProducto").options[$("#pProducto").selectedIndex]?.text||"").trim();
+  const present = ($("#pPresentacion").value || "Unidad").trim();
+  const cant = nn($("#pCantidad").value);
+  const obs = ($("#pObs").value||"").trim();
+  if(!prod || cant<=0){ return toast("⚠️ Producto y cantidad > 0"); }
+  PED_EDICION.push({id:uid(), Producto:prod, Presentacion:present, Cantidad:cant, Observacion:obs});
+  upsertCatalogo(prod);
+  renderPedidoEdit();
+  $("#pProducto").value=""; $("#pCantidad").value=""; $("#pObs").value="";
+};
+function renderPedidoEdit(){
+  const tb=$("#tblPedidoEdit tbody"); tb.innerHTML='';
+  PED_EDICION.forEach((it,idx)=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${idx+1}</td>
+      <td contenteditable onblur="editTmpPedido('${it.id}','Producto',this.textContent)">${it.Producto}</td>
+      <td contenteditable onblur="editTmpPedido('${it.id}','Presentacion',this.textContent)">${it.Presentacion}</td>
+      <td class="right" contenteditable onblur="editTmpPedido('${it.id}','Cantidad',this.textContent)">${it.Cantidad}</td>
+      <td contenteditable onblur="editTmpPedido('${it.id}','Observacion',this.textContent)">${it.Observacion||''}</td>
+      <td><button class="danger" onclick="delTmpPedido('${it.id}')">🗑️</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+function editTmpPedido(id,field,val){
+  const i = PED_EDICION.findIndex(x=>x.id===id);
+  if(i>-1){ PED_EDICION[i][field] = (field==='Cantidad'? nn(val): val.trim()); }
+}
+function delTmpPedido(id){
+  const i = PED_EDICION.findIndex(x=>x.id===id);
+  if(i>-1){ PED_EDICION.splice(i,1); renderPedidoEdit(); }
+}
+$("#btnLimpiarPedido").onclick=()=>{ PED_EDICION=[]; renderPedidoEdit(); };
+
+$("#btnGuardarPedido").onclick=async ()=>{
+  if(PED_EDICION.length===0) return toast("⚠️ Agrega productos");
+  const cab = {
+    id: uid(),
+    FechaPedido: today(),
+    Municipio: $("#pMunicipio").value,
+    Sede: $("#pSede").value,
+    Area: $("#pArea").value.trim(),
+    Proceso: $("#pProceso").value.trim(),
+    Usuario: currentUser ? currentUser.name : ''
+  };
+  // expandir a filas detalle
+  const filas = PED_EDICION.map(x=>({
+    PedidoId: cab.id,
+    FechaPedido: cab.FechaPedido,
+    Municipio: cab.Municipio,
+    Sede: cab.Sede,
+    Area: cab.Area,
+    Proceso: cab.Proceso,
+    Usuario: cab.Usuario,
+    Producto: x.Producto,
+    Presentacion: x.Presentacion || "Unidad",
+    CantidadSolicitada: nn(x.Cantidad),
+    Observacion: x.Observacion||'',
+    CantidadEntregada: 0,
+    CantidadPendiente: nn(x.Cantidad),
+    Entrega1: "",
+    Entrega2: "",
+    ObsDespacho: "",
+    FacturaURL: "" // base64/URL si se carga
+  }));
+  PEDIDOS.push(...filas);
+  localStorage.setItem(LS_PEDIDOS,JSON.stringify(PEDIDOS));
+  toast("✅ Pedido guardado");
+  PED_EDICION=[]; renderPedidoEdit(); renderMisPedidos();
+
+  // Enviar a Google Sheets
+  try{ await gsPost({action:"save_pedido", data: filas}); }catch(e){}
+};
+
+function misPedidosVisible(){
+  // usuarios ven solo los suyos, admin y despacho ven todos
+  let rows = PEDIDOS.slice();
+  if(currentUser && !(isAdmin()||isDespacho())){
+    rows = rows.filter(p=>p.Usuario===currentUser.name);
+  }
+  const q = ($("#buscarP").value||"").toLowerCase();
+  if(q){
+    rows = rows.filter(p=>{
+      const s = [p.Producto,p.Usuario,p.Municipio,p.Sede,p.Area,p.Proceso,p.Observacion].join(' ').toLowerCase();
+      return s.includes(q);
+    });
+  }
+  return rows;
+}
+function renderMisPedidos(){
+  const rows = misPedidosVisible();
+  const tb=$("#tblPedidos tbody"); tb.innerHTML='';
+  rows.forEach(p=>{
+    const tr=document.createElement("tr");
+    const facturaCell = p.FacturaURL ? `<a class="link" href="${p.FacturaURL}" target="_blank">Ver PDF</a>` : "—";
+    tr.innerHTML=`
+      <td>${p.FechaPedido}</td>
+      <td>${p.Producto}</td>
+      <td>${p.Presentacion||'Unidad'}</td>
+      <td class="right">${nn(p.CantidadSolicitada)}</td>
+      <td>${p.Observacion||''}</td>
+      <td>${p.Municipio||''}</td>
+      <td>${p.Sede||''}</td>
+      <td>${p.Area||''}</td>
+      <td>${p.Proceso||''}</td>
+      <td class="right">${nn(p.CantidadEntregada||0)}</td>
+      <td class="right">${nn(p.CantidadPendiente||nn(p.CantidadSolicitada)-(nn(p.CantidadEntregada||0)))}</td>
+      <td>${p.Entrega1||''}</td>
+      <td>${p.Entrega2||''}</td>
+      <td>${p.ObsDespacho||''}</td>
+      <td>${facturaCell}</td>`;
+    tb.appendChild(tr);
+  });
+}
+$("#buscarP").oninput=renderMisPedidos;
+
+$("#btnExportPedidos").onclick=()=>{
+  const rows = misPedidosVisible();
+  const HEAD=["Fecha pedido","Producto","Presentación","Cantidad solicitada","Observación","Municipio","Sede","Área","Proceso","Usuario","Entregada","Pendiente","Entrega #1","Entrega #2","Obs despacho","FacturaURL"];
+  const data = rows.map(p=>({
+    "Fecha pedido":p.FechaPedido, "Producto":p.Producto, "Presentación":p.Presentacion||"Unidad",
+    "Cantidad solicitada":nn(p.CantidadSolicitada), "Observación":p.Observacion||"", "Municipio":p.Municipio||"",
+    "Sede":p.Sede||"", "Área":p.Area||"", "Proceso":p.Proceso||"", "Usuario":p.Usuario||"",
+    "Entregada":nn(p.CantidadEntregada||0), "Pendiente":nn(p.CantidadPendiente||0),
+    "Entrega #1":p.Entrega1||"", "Entrega #2":p.Entrega2||"", "Obs despacho":p.ObsDespacho||"", "FacturaURL":p.FacturaURL||""
+  }));
+  const ws=XLSX.utils.json_to_sheet(data,{header:HEAD});
+  // Agregar una hoja extra con catálogo de productos para validar manualmente
+  const ws2=XLSX.utils.json_to_sheet(CATALOGO.length?CATALOGO:[{Producto:"(agrega tu catálogo aquí)"}]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Pedido");
+  XLSX.utils.book_append_sheet(wb,ws2,"Catalogo");
+  XLSX.writeFile(wb,"Mis_Pedidos.xlsx");
+  toast("📤 Excel exportado");
+};
+
+$("#btnPlantillaPedido").onclick=()=>{
+  // Plantilla con hoja Pedido y hoja Catalogo
+  const ws=XLSX.utils.json_to_sheet([{"Producto":"","Presentación":"Unidad","Cantidad":"","Observación":""}]);
+  const ws2=XLSX.utils.json_to_sheet(CATALOGO.length?CATALOGO:[{Producto:"(agrega tu catálogo aquí)"}]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Pedido");
+  XLSX.utils.book_append_sheet(wb,ws2,"Catalogo");
+  XLSX.writeFile(wb,"Plantilla_Pedido.xlsx");
+  toast("📄 Plantilla creada");
+};
+$("#btnImportPedido").onclick=()=>$("#inpPedidoXLS").click();
+$("#inpPedidoXLS").onchange=async ev=>{
+  const f=ev.target.files[0]; if(!f) return;
+  const ab=await f.arrayBuffer();
+  const wb=XLSX.read(new Uint8Array(ab),{type:'array'});
+  const ws=wb.Sheets["Pedido"] || wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+  rows.forEach(r=>{
+    const prod = r.Producto||r.PRODUCTO||r.producto||"";
+    const cant = nn(r.Cantidad||r.CANTIDAD||r.cantidad||0);
+    const pres = r["Presentación"]||r.Presentacion||"Unidad";
+    const obs  = r.Observación||r.OBSERVACION||r.Observacion||"";
+    if(prod && cant>0){
+      PED_EDICION.push({id:uid(), Producto:prod, Presentacion:pres, Cantidad:cant, Observacion:obs});
+      upsertCatalogo(prod);
+    }
+  });
+  renderPedidoEdit();
+  toast("✅ Productos cargados en el pedido");
+  ev.target.value='';
+};
+
+/* ===================== DESPACHO ===================== */
+function pedidosDespachoVisible(){
+  let rows = PEDIDOS.slice();
+  const q = ($("#buscarD").value||"").toLowerCase();
+  if(q){
+    rows = rows.filter(p=>{
+      const s=[p.Producto,p.Usuario,p.Municipio,p.Sede,p.Area,p.Proceso].join(' ').toLowerCase();
+      return s.includes(q);
+    });
+  }
+  return rows;
+}
+function renderDespacho(){
+  const rows = pedidosDespachoVisible();
+  const tb=$("#tblDespacho tbody"); tb.innerHTML='';
+  rows.forEach((p,idx)=>{
+    const facturaCell = p.FacturaURL ? `<a class="link" href="${p.FacturaURL}" target="_blank">Ver PDF</a>` : "—";
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${p.FechaPedido}</td>
+      <td>${p.Usuario}</td>
+      <td>${p.Producto}</td>
+      <td>${p.Presentacion||'Unidad'}</td>
+      <td class="right">${nn(p.CantidadSolicitada)}</td>
+      <td>${p.Municipio||''}</td>
+      <td>${p.Sede||''}</td>
+      <td>${p.Area||''}</td>
+      <td>${p.Proceso||''}</td>
+      <td class="right"><input style="width:90px" value="${nn(p.CantidadEntregada||0)}" onblur="updDesp(${idx},'CantidadEntregada',this.value)"></td>
+      <td class="right"><b>${nn((p.CantidadSolicitada||0)-(p.CantidadEntregada||0))}</b></td>
+      <td><input type="date" value="${p.Entrega1||''}" onblur="updDesp(${idx},'Entrega1',this.value)"></td>
+      <td><input type="date" value="${p.Entrega2||''}" onblur="updDesp(${idx},'Entrega2',this.value)"></td>
+      <td><input value="${p.ObsDespacho||''}" onblur="updDesp(${idx},'ObsDespacho',this.value)" class="wide"></td>
+      <td>
+        ${facturaCell}
+        <div class="small"><label class="link">Subir PDF<input type="file" accept="application/pdf" style="display:none" onchange="subirFactura(${idx},this.files[0])"></label></div>
+      </td>
+      <td>
+        <button class="ghost" onclick="generarActaPDF(${idx})">🧾 Acta PDF</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+$("#buscarD").oninput=renderDespacho;
+
+function persistPedidos(){ localStorage.setItem(LS_PEDIDOS,JSON.stringify(PEDIDOS)); }
+async function updDesp(i,field,val){
+  if(i<0) return;
+  if(field==="CantidadEntregada"){ val = nn(val); PEDIDOS[i].CantidadEntregada = val; PEDIDOS[i].CantidadPendiente = nn(PEDIDOS[i].CantidadSolicitada)-val; }
+  else { PEDIDOS[i][field]=val; }
+  persistPedidos(); renderDespacho(); renderMisPedidos();
+  // enviar update a Sheets
+  try{ await gsPost({action:"update_pedido", data: PEDIDOS[i]}); }catch(e){}
+  toast("💾 Actualizado");
+}
+
+function fileToDataURL(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=rej; r.readAsDataURL(file);
+  });
+}
+async function subirFactura(i,file){
+  if(!file) return;
+  try{
+    const b64 = await fileToDataURL(file);
+    PEDIDOS[i].FacturaURL = b64;
+    persistPedidos(); renderDespacho(); renderMisPedidos();
+    try{ await gsPost({action:"update_pedido", data: PEDIDOS[i]}); }catch(e){}
+    toast("✅ Factura cargada");
+  }catch(err){ alert("Error leyendo PDF"); }
+}
+
+// Generar Acta PDF (simple)
+async function generarActaPDF(i){
+  const p = PEDIDOS[i]; if(!p) return;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:"pt", format:"a4"});
+  const margin = 40;
+  const line = (y)=>{doc.setDrawColor(200);doc.line(margin,y,595-margin,y);}
+  let y = margin;
+
+  // Encabezado
+  doc.setFontSize(18); doc.text("MYT SALUD IPS", margin, y); y+=24;
+  doc.setFontSize(14); doc.text("Acta de Entrega de Pedido", margin, y); y+=18;
+  line(y); y+=14;
+
+  doc.setFontSize(11);
+  doc.text(`Fecha acta: ${today()}`, margin, y); y+=16;
+  doc.text(`Fecha pedido: ${p.FechaPedido}`, margin, y); y+=16;
+  doc.text(`Solicitante: ${p.Usuario}`, margin, y); y+=16;
+  doc.text(`Municipio: ${p.Municipio}  |  Sede: ${p.Sede}`, margin, y); y+=16;
+  doc.text(`Área: ${p.Area}  |  Proceso: ${p.Proceso}`, margin, y); y+=16;
+  line(y); y+=14;
+
+  doc.text(`Producto: ${p.Producto}`, margin, y); y+=16;
+  doc.text(`Presentación: ${p.Presentacion||'Unidad'}`, margin, y); y+=16;
+  doc.text(`Solicitado: ${nn(p.CantidadSolicitada)}  |  Entregado: ${nn(p.CantidadEntregada||0)}  |  Pendiente: ${nn(p.CantidadPendiente||nn(p.CantidadSolicitada)-(nn(p.CantidadEntregada||0)))}`, margin, y); y+=16;
+  doc.text(`Entrega #1: ${p.Entrega1||'-'}   Entrega #2: ${p.Entrega2||'-'}`, margin, y); y+=16;
+  doc.text(`Obs despacho: ${p.ObsDespacho||'-'}`, margin, y); y+=16;
+  line(y); y+=40;
+
+  doc.text("Recibido conforme:", margin, y); y+=60;
+  doc.text("______________________________", margin, y); y+=16;
+  doc.text("Firma y nombre del receptor", margin, y);
+
+  doc.save(`Acta_${p.Usuario}_${p.Producto}_${p.FechaPedido}.pdf`);
+}
+
+/* ===================== EXPORT/IMPORT CATALOGO ===================== */
+// (por si quieres mover catálogo entre equipos)
+function exportCatalogoExcel(){
+  const ws=XLSX.utils.json_to_sheet(CATALOGO.length?CATALOGO:[{Producto:""}]);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Catalogo");
+  XLSX.writeFile(wb,"Catalogo_Productos.xlsx");
+}
+function importCatalogoExcel(file){
+  return new Promise(async (res,rej)=>{
+    try{
+      const ab=await file.arrayBuffer();
+      const wb=XLSX.read(new Uint8Array(ab),{type:'array'});
+      const ws=wb.Sheets["Catalogo"]||wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+      const nuevos = rows.map(r=>({Producto:r.Producto||r.producto||""})).filter(x=>x.Producto);
+      // merge
+      nuevos.forEach(n=>{ upsertCatalogo(n.Producto); });
+      res(true);
+    }catch(e){ rej(e); }
+  });
+}
+
+/* ===================== EVENTOS ADICIONALES ===================== */
+document.addEventListener("keydown",e=>{
+  if(e.key==="Enter" && document.activeElement.id==="pin"){ $("#btnEntrar").click(); }
+});
+</script>
+</body>
+</html>

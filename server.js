@@ -1,134 +1,161 @@
-// ===============================
-// 📦 server.js — API + estáticos
-// ===============================
+// ============================
+//  SERVIDOR INVENTARIO MYT
+// ============================
+
 const express = require("express");
-const cors = require("cors");
-const bodyParser = require("body-parser");
 const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const fs = require("fs");
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
+// ====== CONFIGURACIÓN ======
 app.use(cors());
-app.use(bodyParser.json({ limit: "20mb" }));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-// Servir tu app web (index.html y recursos)
-app.use(express.static(path.join(__dirname, ".")));
+// Sirve archivos estáticos (HTML, CSS, JS, imágenes)
+app.use(express.static(path.join(__dirname)));
 
-// Conexión a SQLite
-const DB_FILE = path.join(__dirname, "inventario-web.db");
-const db = new sqlite3.Database(DB_FILE);
-
-// Crear tablas
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS usuarios (
-    id TEXT PRIMARY KEY,
-    nombre TEXT,
-    pin TEXT,
-    rol TEXT
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS kardex (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    IdDescripcion TEXT,
-    NombreComercial TEXT,
-    TipoProductos TEXT,
-    Concentracion TEXT,
-    UnidadMedida TEXT,
-    FormaFarmaceutica TEXT,
-    PrincipioActivo TEXT,
-    RefPlu TEXT,
-    Cantidad REAL,
-    Mov TEXT,
-    CostoUnitario REAL,
-    Iva TEXT,
-    Fecha TEXT,
-    RegistroInvima TEXT,
-    Lote TEXT,
-    FechaVencimiento TEXT,
-    MarcaLab TEXT,
-    Proveedor TEXT,
-    Nit TEXT,
-    EstadoRS TEXT,
-    ClasifDisp TEXT,
-    TempAlmacen TEXT,
-    VidaUtil TEXT,
-    Municipio TEXT,
-    Sede TEXT,
-    Ubicacion TEXT,
-    Observacion TEXT,
-    Usuario TEXT,
-    t TEXT
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS pedidos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    PedidoId TEXT,
-    FechaPedido TEXT,
-    Municipio TEXT,
-    Sede TEXT,
-    Area TEXT,
-    Proceso TEXT,
-    Usuario TEXT,
-    Producto TEXT,
-    Presentacion TEXT,
-    CantidadSolicitada REAL,
-    Observacion TEXT,
-    CantidadEntregada REAL,
-    CantidadPendiente REAL,
-    Entrega1 TEXT,
-    Entrega2 TEXT,
-    ObsDespacho TEXT,
-    FacturaURL TEXT
-  )`);
+// ====== CONEXIÓN A BASE DE DATOS ======
+const DB_PATH = path.join(__dirname, "inventario-web.db");
+const db = new sqlite3.Database(DB_PATH, (err) => {
+  if (err) {
+    console.error("Error al conectar con la base de datos:", err.message);
+  } else {
+    console.log("Conectado a la base de datos SQLite.");
+  }
 });
 
-console.log("✅ Base SQLite lista:", DB_FILE);
+// ====== RUTA PRINCIPAL ======
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
 
-// ENDPOINTS
-function run(sql, params = []) {
-  return new Promise((res, rej) => {
-    db.run(sql, params, function (err) {
-      if (err) rej(err);
-      else res({ lastID: this.lastID, changes: this.changes });
-    });
+// ====== OBTENER TODOS LOS PEDIDOS ======
+app.get("/api/pedidos", (req, res) => {
+  db.all("SELECT * FROM pedidos ORDER BY id DESC", [], (err, rows) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+    } else {
+      res.json(rows);
+    }
   });
-}
-function all(sql, params = []) {
-  return new Promise((res, rej) => {
-    db.all(sql, params, (err, rows) => (err ? rej(err) : res(rows)));
+});
+
+// ====== INSERTAR NUEVO PEDIDO ======
+app.post("/api/pedidos", (req, res) => {
+  const {
+    producto,
+    presentacion,
+    cantidad_solicitada,
+    observacion,
+    municipio,
+    sede,
+    area,
+    proceso,
+  } = req.body;
+
+  const sql = `
+    INSERT INTO pedidos (
+      producto, presentacion, cantidad_solicitada, observacion, municipio,
+      sede, area, proceso, cantidad_entregada, cantidad_pendiente
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+  `;
+  const pendiente = cantidad_solicitada;
+
+  db.run(
+    sql,
+    [
+      producto,
+      presentacion,
+      cantidad_solicitada,
+      observacion,
+      municipio,
+      sede,
+      area,
+      proceso,
+      pendiente,
+    ],
+    function (err) {
+      if (err) {
+        res.status(500).json({ error: err.message });
+      } else {
+        res.json({ id: this.lastID, mensaje: "Pedido guardado correctamente." });
+      }
+    }
+  );
+});
+
+// ====== ACTUALIZAR PEDIDO (ENTREGAS / FACTURA) ======
+app.put("/api/pedidos/:id", (req, res) => {
+  const {
+    cantidad_entregada,
+    cantidad_pendiente,
+    entrega1,
+    entrega2,
+    obs_despacho,
+    factura_pdf,
+  } = req.body;
+
+  const sql = `
+    UPDATE pedidos SET
+      cantidad_entregada = ?,
+      cantidad_pendiente = ?,
+      entrega1 = ?,
+      entrega2 = ?,
+      obs_despacho = ?,
+      factura_pdf = ?
+    WHERE id = ?
+  `;
+
+  db.run(
+    sql,
+    [
+      cantidad_entregada,
+      cantidad_pendiente,
+      entrega1,
+      entrega2,
+      obs_despacho,
+      factura_pdf,
+      req.params.id,
+    ],
+    function (err) {
+      if (err) {
+        res.status(500).json({ error: err.message });
+      } else {
+        res.json({ cambios: this.changes, mensaje: "Pedido actualizado." });
+      }
+    }
+  );
+});
+
+// ====== ELIMINAR PEDIDO ======
+app.delete("/api/pedidos/:id", (req, res) => {
+  db.run("DELETE FROM pedidos WHERE id = ?", [req.params.id], function (err) {
+    if (err) {
+      res.status(500).json({ error: err.message });
+    } else {
+      res.json({ mensaje: "Pedido eliminado correctamente." });
+    }
   });
-}
-
-// USUARIOS
-app.get("/usuarios", async (req, res) => res.json(await all("SELECT * FROM usuarios")));
-app.post("/usuarios", async (req, res) => {
-  const { id, nombre, pin, rol } = req.body;
-  await run("INSERT INTO usuarios (id,nombre,pin,rol) VALUES (?,?,?,?)", [id, nombre, pin, rol]);
-  res.json({ ok: true });
 });
 
-// KARDEX
-app.get("/kardex", async (req, res) => res.json(await all("SELECT * FROM kardex")));
-app.post("/kardex", async (req, res) => {
-  const m = req.body;
-  await run(`INSERT INTO kardex (
-    IdDescripcion,NombreComercial,TipoProductos,Concentracion,UnidadMedida,FormaFarmaceutica,
-    PrincipioActivo,RefPlu,Cantidad,Mov,CostoUnitario,Iva,Fecha,RegistroInvima,Lote,FechaVencimiento,
-    MarcaLab,Proveedor,Nit,EstadoRS,ClasifDisp,TempAlmacen,VidaUtil,Municipio,Sede,Ubicacion,Observacion,Usuario,t
-  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, Object.values(m));
-  res.json({ ok: true });
+// ====== DESCARGAR FACTURA ======
+app.get("/api/facturas/:archivo", (req, res) => {
+  const archivo = path.join(__dirname, "facturas", req.params.archivo);
+  if (fs.existsSync(archivo)) {
+    res.download(archivo);
+  } else {
+    res.status(404).send("Factura no encontrada.");
+  }
 });
 
-// PEDIDOS
-app.get("/pedidos", async (req, res) => res.json(await all("SELECT * FROM pedidos")));
-app.post("/pedidos", async (req, res) => {
-  const p = req.body;
-  await run(`INSERT INTO pedidos (
-    PedidoId,FechaPedido,Municipio,Sede,Area,Proceso,Usuario,Producto,Presentacion,
-    CantidadSolicitada,Observacion,CantidadEntregada,CantidadPendiente,Entrega1,Entrega2,ObsDespacho,FacturaURL
-  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, Object.values(p));
-  res.json({ ok: true });
+// ====== INICIAR SERVIDOR ======
+app.listen(PORT, () => {
+  console.log(`✅ Servidor corriendo en el puerto ${PORT}`);
+  console.log(`🌍 http://localhost:${PORT}`);
 });
-
-const PORT = 3000;
-app.listen(PORT, () => console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`));
